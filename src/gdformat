@@ -1,0 +1,137 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
+import sys
+import os
+
+
+# https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html
+
+
+class Func_Block:
+	"""Func_Block is class that store the beggining line of func block and the end line of the block. """
+	def __init__(self, start, end):
+		self.start = start
+		self.end = end
+		self.lines = []
+	def add_line(self, line):
+		self.lines.append(line)
+
+
+def length_of_string(e):
+  return len(e)
+
+
+def get_func_blocks(lines):
+	count_of_lines = len(lines)
+	found = False
+	block_end = 0
+	block_start = 0
+	blocks = []
+	for i in range(count_of_lines - 1, -1, -1 ):
+		if found:
+			if 'func' in lines[i]:
+				block_start = i
+				block = Func_Block(block_start, block_end)
+				blocks.append(block)
+				found = False
+		elif lines[i].count('    ') > 0:
+			block_end = i
+			found = True
+	
+	for block in blocks:
+		for i in range(block.start,block.end+1):
+			block.add_line(lines[i])
+
+	return blocks
+
+
+def get_var_lines(lines):
+	vars = []
+	for line_i in range(len(lines) - 1, -1, -1):
+		if lines[line_i].count('    ') == 0 and 'var' in lines[line_i]:
+			vars.append(lines[line_i])
+			lines.pop(line_i)
+	return vars
+
+
+def format_file(script):
+	"""Apply gdscript styleguide to gdcsript file."""
+	script_text = ''
+
+	with open(script, 'r') as file:
+		script_text = file.read()
+
+	with open(script, 'w') as file:
+		formated_script = ''
+		
+		lines = script_text.splitlines()
+		
+		func_blocks = get_func_blocks(lines)
+		var_lines = get_var_lines(lines)
+
+		extend_line = ''
+		class_line = ''
+
+		for line in lines:
+			if extend_line != '' and class_line != '':
+				break
+			if 'extend' in line:
+				extend_line = line
+			elif 'class_name' in line:
+				class_line = line
+
+		formated_script += class_line + '\n'
+		formated_script += extend_line + '\n\n'
+
+		var_lines.sort(key=length_of_string)
+
+		for i in range(len(var_lines) -1, -1, -1):
+			if '@export' in var_lines[i]:
+				formated_script += var_lines[i] + '\n'
+				var_lines.pop(i)
+		
+		formated_script += '\n'
+
+		for i in range(len(var_lines) -1, -1, -1):
+			if '@onready' in var_lines[i]:
+				formated_script += var_lines[i] + '\n'
+				var_lines.pop(i)
+		
+		formated_script += '\n'
+
+		var_lines.reverse()
+
+		for line in var_lines:
+			formated_script += line + '\n'
+
+		formated_script += '\n\n'
+
+		for func_block in func_blocks:
+			for line in func_block.lines:
+				
+				formated_script += line + '\n'
+			formated_script += '\n\n'
+
+		# for line in lines:
+		# 	formated_script += line + '\n'
+
+		file.write(formated_script)
+
+
+def format_dir(dir):
+	pass
+
+
+if __name__ == '__main__':
+	# Chack if entered path or file.
+	if len(sys.argv) <= 1:
+		print("Need to add path or directory!")
+		sys.exit()
+
+	arg = sys.argv[1]
+
+	if os.path.isdir(arg):
+		format_dir()
+	elif os.path.isfile(arg):
+		format_file(arg)
