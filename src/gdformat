@@ -3,19 +3,62 @@
 
 import sys
 import os
+import re
 
 
 # https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html
 
 
 class Func_Block:
-	"""Func_Block is class that store the beggining line of func block and the end line of the block. """
+	'''Func_Block is class that store the beggining line of func block and the end line of the block. '''
 	def __init__(self, start, end):
 		self.start = start
 		self.end = end
 		self.lines = []
+		self.comment_lines = []
+
 	def add_line(self, line):
 		self.lines.append(line)
+
+	def add_comment_line(self, line):
+		self.comment_lines.insert(0, line)
+		
+	def fix_if_statements(self):
+		for line in self.lines:
+			if 'if' not in line:
+				continue
+			first_chracter = line.find('if')
+			line_index = self.lines.index(line)
+
+			line = re.sub(r'\s+', ' ', line.strip())
+
+			pattern = r"(if|elif|while)\s*\((.*)\)\s*:+(.*)"
+			replacement = r"\1 \2:\3"
+
+			line = re.sub(pattern, replacement, line)
+
+			indentation = ''
+			
+			for i in range(0, first_chracter):
+				indentation += ' '
+
+			pattern = r":\s*(.*)"
+			after_statement = re.search(pattern, line).group(1)
+
+			self.lines[line_index] = indentation + line
+
+			if after_statement != '':
+				self.lines[line_index] = re.sub(pattern, '', self.lines[line_index])
+				self.lines[line_index] += '\n    ' + indentation + after_statement
+
+
+
+def clear_empty_lines(lines):
+	cleared_line = []
+	for line in lines:
+		if len(line) > 0:
+			cleared_line.append(line)
+	return cleared_line
 
 
 def length_of_string(e):
@@ -29,6 +72,7 @@ def get_func_blocks(lines):
 	block_start = 0
 	blocks = []
 	for i in range(count_of_lines - 1, -1, -1 ):
+		# Func block
 		if found:
 			if 'func' in lines[i]:
 				block_start = i
@@ -38,10 +82,24 @@ def get_func_blocks(lines):
 		elif lines[i].count('    ') > 0:
 			block_end = i
 			found = True
-	
+
+	# Func comments
+	for block in blocks:
+		done = False
+		line_i = block.start
+		while not done:
+			line_i = line_i - 1
+			if lines[line_i].count('    ') > 0:
+				done = True
+				break
+			if lines[line_i].count('#') > 0:
+				block.add_comment_line(lines[line_i])
+
 	for block in blocks:
 		for i in range(block.start,block.end+1):
 			block.add_line(lines[i])
+
+	blocks.reverse()
 
 	return blocks
 
@@ -56,7 +114,7 @@ def get_var_lines(lines):
 
 
 def format_file(script):
-	"""Apply gdscript styleguide to gdcsript file."""
+	'''Apply gdscript styleguide to gdcsript file.'''
 	script_text = ''
 
 	with open(script, 'r') as file:
@@ -67,7 +125,12 @@ def format_file(script):
 		
 		lines = script_text.splitlines()
 		
+		# Logic Format
+
+		lines = clear_empty_lines(lines)
 		func_blocks = get_func_blocks(lines)
+		for block in func_blocks:
+			block.fix_if_statements()
 		var_lines = get_var_lines(lines)
 
 		extend_line = ''
@@ -80,6 +143,8 @@ def format_file(script):
 				extend_line = line
 			elif 'class_name' in line:
 				class_line = line
+
+		# Write 
 
 		formated_script += class_line + '\n'
 		formated_script += extend_line + '\n\n'
@@ -108,13 +173,11 @@ def format_file(script):
 		formated_script += '\n\n'
 
 		for func_block in func_blocks:
+			for comment_line in func_block.comment_lines:
+				formated_script += comment_line + '\n'
 			for line in func_block.lines:
-				
 				formated_script += line + '\n'
 			formated_script += '\n\n'
-
-		# for line in lines:
-		# 	formated_script += line + '\n'
 
 		file.write(formated_script)
 
@@ -126,7 +189,7 @@ def format_dir(dir):
 if __name__ == '__main__':
 	# Chack if entered path or file.
 	if len(sys.argv) <= 1:
-		print("Need to add path or directory!")
+		print('Need to add path or directory!')
 		sys.exit()
 
 	arg = sys.argv[1]
